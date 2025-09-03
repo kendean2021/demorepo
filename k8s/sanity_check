@@ -1,0 +1,12 @@
+#!/bin/bash
+
+minikube start --addons=ingress
+eval $(minikube -p minikube docker-env)
+docker build -t myapp:dev .
+mkdir -p .tmp && cp -r k8s .tmp/k8s
+sed -i "s|IMAGE_PLACEHOLDER|myapp:dev|g" .tmp/k8s/deployment.yaml
+kubectl apply -f .tmp/k8s/
+kubectl rollout status deploy/myapp --timeout=120s
+kubectl run curl --image=curlimages/curl:8.8.0 --restart=Never --rm -i -- \
+  sh -lc 'curl -sS -o /dev/stderr -w "HTTP:%{http_code}\n" http://myapp.default.svc.cluster.local'
+
