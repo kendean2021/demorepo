@@ -49,7 +49,17 @@ jobs:
           cp -r k8s .tmp/k8s
           sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_NAME:$IMAGE_TAG|g" .tmp/k8s/deployment.yaml
           kubectl apply -f .tmp/k8s/
-          kubectl rollout status deploy/myapp -n default --timeout=120s
+          
+      - name: Wait for rollout (longer)
+        run: kubectl rollout status deploy/myapp -n default --timeout=300s
+
+      - name: Debug: pods, logs, events
+        if: always()
+        run: |
+          echo "== pods ==" && kubectl get pods -o wide
+          echo "== describe ==" && kubectl describe pod -l app=myapp || true
+          echo "== logs ==" && kubectl logs -l app=myapp --all-containers --tail=200 || true
+          echo "== events ==" && kubectl get events --sort-by=.metadata.creationTimestamp | tail -n 100 || true
 
       - name: Show service info
         run: |

@@ -14,7 +14,7 @@ spec:
       containers:
         - name: myapp
           image: IMAGE_PLACEHOLDER
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           readinessProbe:
