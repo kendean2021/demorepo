@@ -1,0 +1,57 @@
+name: Build & Deploy to Minikube
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Start Minikube in the runner
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@v0.0.15
+        with:
+          driver: docker
+          kubernetes-version: v1.30.0
+          start-args: "--addons=ingress"
+
+      - name: Verify cluster
+        run: |
+          kubectl get nodes
+          kubectl get ns
+
+      - name: Build Docker image
+        run: |
+          IMAGE_NAME=myapp
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      # Load the image into Minikube's Docker registry (no external push needed)
+      - name: Load image into Minikube
+        run: |
+          minikube image load $IMAGE_NAME:$IMAGE_TAG
+
+      - name: Apply Kubernetes manifests
+        run: |
+          # Replace image tag in a temp file (keeps repo clean)
+          mkdir -p .tmp
+          cp -r k8s .tmp/k8s
+          sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_NAME:$IMAGE_TAG|g" .tmp/k8s/deployment.yaml
+          kubectl apply -f .tmp/k8s/
+          kubectl rollout status deploy/myapp -n default --timeout=120s
+
+      - name: Show service info
+        run: |
+          kubectl get svc myapp
+          echo "To test locally: minikube service myapp --url"
