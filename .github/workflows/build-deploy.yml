@@ -49,6 +49,9 @@ jobs:
           cp -r k8s .tmp/k8s
           sed -i "s|IMAGE_PLACEHOLDER|$IMAGE_NAME:$IMAGE_TAG|g" .tmp/k8s/deployment.yaml
           kubectl apply -f .tmp/k8s/
+
+      - name: Show rendered deployment (sanity)
+        run: sed -n '1,200p' .tmp/k8s/deployment.yaml
           
       - name: Wait for rollout (longer)
         run: kubectl rollout status deploy/myapp -n default --timeout=300s
