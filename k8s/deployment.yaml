@@ -14,13 +14,16 @@ spec:
       containers:
         - name: myapp
           image: IMAGE_PLACEHOLDER
-          imagePullPolicy: Never
+          imagePullPolicy: Never          # force Minikube to use the image you loaded
           ports:
             - containerPort: 8080
           readinessProbe:
             httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 5
+            initialDelaySeconds: 40       # give the app time to boot
+            periodSeconds: 5
+            failureThreshold: 12
           livenessProbe:
             httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 15
-
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 6
