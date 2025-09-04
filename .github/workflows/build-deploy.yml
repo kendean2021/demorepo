@@ -54,15 +54,17 @@ jobs:
         run: sed -n '1,200p' .tmp/k8s/deployment.yaml
           
       - name: Wait for rollout (longer)
-        run: kubectl rollout status deploy/myapp -n default --timeout=300s
+        run: kubectl rollout status deploy/myapp --timeout=300s
 
-      - name: Debug: pods, logs, events
-        if: always()
+      - name: Diagnostics (pods, logs, events)
+        if: ${{ always() }}
         run: |
-          echo "== pods ==" && kubectl get pods -o wide
-          echo "== describe ==" && kubectl describe pod -l app=myapp || true
-          echo "== logs ==" && kubectl logs -l app=myapp --all-containers --tail=200 || true
-          echo "== events ==" && kubectl get events --sort-by=.metadata.creationTimestamp | tail -n 100 || true
+          set -x
+          kubectl get pods -o wide
+          kubectl describe deployment myapp || true
+          kubectl describe pod -l app=myapp || true
+          kubectl logs -l app=myapp --all-containers --tail=200 || true
+          kubectl get events --sort-by=.metadata.creationTimestamp | tail -n 100 || true
 
       - name: Show service info
         run: |
