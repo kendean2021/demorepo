@@ -16,13 +16,34 @@ spec:
     spec:
       containers:
         - name: myapp
-          image: IMAGE_PLACEHOLDER
-          imagePullPolicy: Never
+          image: IMAGE_PLACEHOLDER            # CI replaces this (myapp:<short-sha>)
+          imagePullPolicy: Never              # use image loaded into Minikube
           ports:
             - containerPort: 8080
+          command:
+            - sh
+            - -lc
+            - uvicorn app.main:app --host 0.0.0.0 --port 8080
           readinessProbe:
-            httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 20
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 25
+            periodSeconds: 5
+            failureThreshold: 12
           livenessProbe:
-            httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 30
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      restartPolicy: Always
+
