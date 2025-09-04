@@ -16,18 +16,13 @@ spec:
     spec:
       containers:
         - name: myapp
-          image: IMAGE_PLACEHOLDER            # CI replaces this with myapp:<sha>
-          imagePullPolicy: Never              # use the image loaded into Minikube
+          image: IMAGE_PLACEHOLDER
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           readinessProbe:
-            httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 5
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 20
           livenessProbe:
-            httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 10
-
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 30
