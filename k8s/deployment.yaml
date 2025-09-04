@@ -2,28 +2,33 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: myapp
-  labels: { app: myapp }
+  labels:
+    app: myapp
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: myapp }
+    matchLabels:
+      app: myapp
   template:
     metadata:
-      labels: { app: myapp }
+      labels:
+        app: myapp
     spec:
       containers:
         - name: myapp
-          image: IMAGE_PLACEHOLDER
-          imagePullPolicy: Never          # force Minikube to use the image you loaded
+          image: IMAGE_PLACEHOLDER            # CI replaces this with myapp:<sha>
+          imagePullPolicy: Never              # use the image loaded into Minikube
           ports:
             - containerPort: 8080
+          command: ["sh","-lc","python -m http.server 8080"]
           readinessProbe:
-            httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 40       # give the app time to boot
-            periodSeconds: 5
-            failureThreshold: 12
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
           livenessProbe:
-            httpGet: { path: /, port: 8080 }
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            failureThreshold: 6
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+
