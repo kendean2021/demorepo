@@ -56,6 +56,19 @@ jobs:
       - name: Wait for rollout (longer)
         run: kubectl rollout status deploy/myapp --timeout=300s
 
+      - name: K8s status
+        run: |
+          kubectl get deploy,rs,pods -l app=myapp -o wide
+          kubectl get svc myapp -o wide
+
+      - name: Smoke test (200 OK)
+        run: |
+          sleep 5
+          CODE=$(kubectl run curl --image=curlimages/curl:8.8.0 --restart=Never --rm -i -- \
+            sh -lc 'curl -s -o /dev/null -w "%{http_code}" http://myapp.default.svc.cluster.local/')
+          echo "HTTP CODE: $CODE"; test "$CODE" = "200"
+
+
       - name: Diagnostics (pods, logs, events)
         if: ${{ always() }}
         run: |
