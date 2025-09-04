@@ -20,7 +20,6 @@ spec:
           imagePullPolicy: Never              # use the image loaded into Minikube
           ports:
             - containerPort: 8080
-          command: ["sh","-lc","python -m http.server 8080"]
           readinessProbe:
             httpGet:
               path: /
