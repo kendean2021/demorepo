@@ -42,6 +42,20 @@ jobs:
         run: |
           minikube image load $IMAGE_NAME:$IMAGE_TAG
 
+      - name: Enable Ingress
+        run: minikube addons enable ingress
+
+      - name: Install cert-manager
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
+
+      - name: Verify cert-manager CRDs
+        run: |
+          kubectl get crd certificates.cert-manager.io clusterissuers.cert-manager.io
+
       - name: Apply Kubernetes manifests
         run: |
           # Replace image tag in a temp file (keeps repo clean)
