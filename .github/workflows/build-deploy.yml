@@ -56,6 +56,13 @@ jobs:
       - name: Wait for rollout (longer)
         run: kubectl rollout status deploy/myapp --timeout=300s
 
+      - name: Verify Ingress TLS (in-cluster)
+        run: |
+          IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.clusterIP}')
+          kubectl run curl --image=curlimages/curl:8.8.0 --restart=Never --rm -i -- \
+            sh -lc 'curl -ks -H "Host: myapp.local" https://'"$IP"'/'
+
+
       - name: K8s status
         run: |
           kubectl get deploy,rs,pods -l app=myapp -o wide
