@@ -65,13 +65,13 @@ jobs:
           set -euo pipefail
           mkdir -p .tmp/dev
           cat <<'EOF' > .tmp/dev/kustomization.yaml
-resources:
-  - ../../k8s/overlays/dev
-images:
-  - name: myapp
-    newName: __REPLACE_ME__
-    digest: __DIGEST__
-EOF
+          resources:
+            - ../../k8s/overlays/dev
+          images:
+            - name: myapp
+              newName: ${REGISTRY}/${OWNER}/${IMAGE_NAME}_
+              digest: ${DIGEST}
+          EOF
           sed -i "s|__REPLACE_ME__|${REGISTRY}/${OWNER}/${IMAGE_NAME}|g" .tmp/dev/kustomization.yaml
           sed -i "s|__DIGEST__|${DIGEST}|g" .tmp/dev/kustomization.yaml
           kubectl apply -k .tmp/dev
@@ -90,13 +90,13 @@ EOF
         run: |
           mkdir -p .tmp/stage
           cat <<'EOF' > .tmp/stage/kustomization.yaml
-resources:
-  - ../../k8s/overlays/stage
-images:
-  - name: myapp
-    newName: __REPLACE_ME__
-    digest: __DIGEST__
-EOF
+        resources:
+          - ../../k8s/overlays/stage
+        images:
+          - name: myapp
+            newName: ${REGISTRY}/${OWNER}/${IMAGE_NAME}
+            digest: ${DIGEST}
+          EOF
           sed -i "s|__REPLACE_ME__|${REGISTRY}/${OWNER}/${IMAGE_NAME}|g" .tmp/stage/kustomization.yaml
           sed -i "s|__DIGEST__|${DIGEST}|g" .tmp/stage/kustomization.yaml
           kubectl apply -k .tmp/stage
