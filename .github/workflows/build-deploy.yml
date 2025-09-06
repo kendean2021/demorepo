@@ -10,8 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write   # needed to push to GHCR
-
+      packages: write
     env:
       IMAGE_NAME: myapp
       REGISTRY: ghcr.io
