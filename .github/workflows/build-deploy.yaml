@@ -81,6 +81,15 @@ jobs:
           kubectl apply -k .tmp/dev
           kubectl rollout status deploy/myapp --timeout=180s
 
+      - name: Debug on rollout failure
+        if: failure()
+        run: |
+          kubectl get pods -l app=myapp -o wide
+          kubectl describe pod -l app=myapp | sed -n '1,200p' || true
+          kubectl logs -l app=myapp --all-containers --tail=200 || true
+          kubectl get events --sort-by=.metadata.creationTimestamp | tail -n 80 || true
+
+
       - name: Wait for TLS cert (skip if you rely on ingress-shim)
         run: kubectl wait --for=condition=ready certificate/myapp-cert --timeout=180s || true
 
