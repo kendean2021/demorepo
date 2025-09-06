@@ -1,0 +1,4 @@
+resources:
+  - ../../base
+# image gets injected at deploy time via a temp overlay in the workflow
+

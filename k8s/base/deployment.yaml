@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: myapp
-          image: IMAGE_PLACEHOLDER            # CI replaces this (myapp:<short-sha>)
+          image: myapp            # CI replaces this (myapp:<short-sha>)
           imagePullPolicy: Never              # use image loaded into Minikube
           ports:
             - containerPort: 8080

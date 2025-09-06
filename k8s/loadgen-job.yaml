@@ -1,0 +1,13 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: loadgen
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: hey
+        image: rakyll/hey
+        args: ["-z","180s","-c","30","http://myapp.default.svc.cluster.local/"]
