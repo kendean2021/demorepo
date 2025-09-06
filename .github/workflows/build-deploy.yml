@@ -64,7 +64,6 @@ jobs:
           IMG=$(kubectl get pod "$POD" -o jsonpath='{.spec.containers[0].image}')
           echo "Pod image: $IMG"   # should be ghcr.io/...@sha256:*
 
-
         - name: Apply STAGE overlay pinned by digest
           if: github.ref == 'refs/heads/stage'
           run: |
