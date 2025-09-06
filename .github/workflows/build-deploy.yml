@@ -8,49 +8,48 @@ on:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
-      packages: write # needed to push to GHCR
+      packages: write   # needed to push to GHCR
 
-      env:
-        IMAGE_NAME: myapp
-        REGISTRY: ghcr.io
-        OWNER: ${{ github.repository_owner }}
-        TAG: ${{ github.sha }}
+    env:
+      IMAGE_NAME: myapp
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+      TAG: ${{ github.sha }}
 
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-        - name: Start Minikube
-          uses: medyagh/setup-minikube@v0.0.15
-          with:
-            driver: docker
-            kubernetes-version: v1.30.0
-            start-args: "--addons=ingress,metrics-server"
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@v0.0.15
+        with:
+          driver: docker
+          kubernetes-version: v1.30.0
+          start-args: "--addons=ingress,metrics-server"
 
-        - name: Docker login (GHCR)
-          run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Docker login (GHCR)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-        - name: Build & push image to GHCR
-          run: |
-            IMAGE="$REGISTRY/$OWNER/$IMAGE_NAME:$TAG"
-            docker build -t "$IMAGE" .
-            docker push "$IMAGE"
-            # capture digest for pinning
-            FULL=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
-            echo "FULL=$FULL" >> $GITHUB_ENV
-            echo "DIGEST=${FULL#*@}" >> $GITHUB_ENV
-            echo "PUBLISHED=$FULL"
-  
-        # Render a temp kustomize overlay that pins the digest
-        - name: Apply DEV overlay pinned by digest
-          run: |
-            mkdir -p .tmp/dev
-            cat > .tmp/dev/kustomization.yaml <<EOF
+      - name: Build & push image to GHCR
+        run: |
+          IMAGE="$REGISTRY/$OWNER/$IMAGE_NAME:$TAG"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          # capture digest for pinning
+          FULL=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+          echo "FULL=$FULL" >> $GITHUB_ENV
+          echo "DIGEST=${FULL#*@}" >> $GITHUB_ENV
+          echo "PUBLISHED=$FULL"
+
+      # Render a temp kustomize overlay that pins the digest
+      - name: Apply DEV overlay pinned by digest
+        run: |
+          mkdir -p .tmp/dev
+          cat > .tmp/dev/kustomization.yaml <<EOF
           resources:
-                - ../../k8s/overlays/dev
+            - ../../k8s/overlays/dev
           images:
             - name: myapp
               newName: $REGISTRY/$OWNER/$IMAGE_NAME
@@ -59,11 +58,12 @@ jobs:
           kubectl apply -k .tmp/dev
           kubectl rollout status deploy/myapp --timeout=120s
 
-        - name: Verify image digest in running pods
-          run: |
-            POD=$(kubectl get pods -l app=myapp -o jsonpath='{.items[0].metadata.name}')
-            IMG=$(kubectl get pod "$POD" -o jsonpath='{.spec.containers[0].image}')
-            echo "Pod image: $IMG"   # should be ghcr.io/...@sha256:*
+      - name: Verify image digest in running pods
+        run: |
+          POD=$(kubectl get pods -l app=myapp -o jsonpath='{.items[0].metadata.name}')
+          IMG=$(kubectl get pod "$POD" -o jsonpath='{.spec.containers[0].image}')
+          echo "Pod image: $IMG"   # should be ghcr.io/...@sha256:*
+
 
         - name: Apply STAGE overlay pinned by digest
           if: github.ref == 'refs/heads/stage'
