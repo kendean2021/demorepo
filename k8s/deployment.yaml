@@ -45,5 +45,19 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
+        - name: SECRET_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: myapp-secrets
+              key: SECRET_TOKEN
+      envFrom:
+        - configMapRef:
+            name: myapp-config
+      eng:
+        - name: SECRET_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: myapp-secrets
+              key: SECRET_TOKEN
       restartPolicy: Always
 

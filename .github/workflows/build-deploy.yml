@@ -56,6 +56,12 @@ jobs:
         run: |
           kubectl get crd certificates.cert-manager.io clusterissuers.cert-manager.io
 
+      - name: Create/Update K8s Secret from GitHub Secret
+        run: |
+          kubectl create secret generic myapp-secrets \
+            --from-literal=SECRET_TOKEN='${{ secrets.SECRET_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Apply Kubernetes manifests
         run: |
           # Replace image tag in a temp file (keeps repo clean)
