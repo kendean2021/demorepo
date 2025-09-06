@@ -1,0 +1,115 @@
+name: Build & Deploy to Minikube
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: myapp
+      REGISTRY: ghcr.io
+      OWNER: ${{ github.repository_owner }}
+      TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@v0.0.15
+        with:
+          driver: docker
+          kubernetes-version: v1.30.0
+          start-args: "--addons=ingress,metrics-server"
+
+      - name: Docker login (GHCR)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build & push image to GHCR (capture digest)
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${OWNER}/${IMAGE_NAME}:${TAG}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          FULL=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+          echo "FULL=$FULL" >> $GITHUB_ENV
+          echo "DIGEST=${FULL#*@}" >> $GITHUB_ENV
+          echo "Published: $FULL"
+
+      # If your GHCR package is private, allow pulls from default SA
+      - name: Create imagePullSecret for GHCR (optional)
+        run: |
+          kubectl create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username='${{ github.actor }}' \
+            --docker-password='${{ secrets.GITHUB_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}' || true
+
+      - name: Install cert-manager (ephemeral cluster)
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
+
+      - name: Create/Update app Secret from repo secret
+        run: |
+          kubectl create secret generic myapp-secrets \
+            --from-literal=SECRET_TOKEN='${{ secrets.SECRET_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply DEV overlay pinned by digest (kustomize)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/dev
+          {
+            echo "resources:"
+            echo "  - ../../k8s/overlays/dev"
+            echo "images:"
+            echo "  - name: myapp"
+            echo "    newName: ${REGISTRY}/${OWNER}/${IMAGE_NAME}"
+            echo "    digest: ${DIGEST}"
+          } > .tmp/dev/kustomization.yaml
+          kubectl apply -k .tmp/dev
+          kubectl rollout status deploy/myapp --timeout=180s
+
+      - name: Wait for TLS cert (skip if you rely on ingress-shim)
+        run: kubectl wait --for=condition=ready certificate/myapp-cert --timeout=180s || true
+
+      - name: Verify image digest in running pod
+        run: |
+          POD=$(kubectl get pods -l app=myapp -o jsonpath='{.items[0].metadata.name}')
+          IMG=$(kubectl get pod "$POD" -o jsonpath='{.spec.containers[0].image}')
+          echo "Pod image: $IMG"  # expect ghcr.io/...@sha256:*
+
+      - name: Verify Ingress TLS (in-cluster)
+        run: |
+          IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.clusterIP}')
+          kubectl run curl --image=curlimages/curl:8.8.0 --restart=Never --rm -i -- \
+            sh -lc 'curl -ks -H "Host: myapp.local" https://'"$IP"'/' || true
+
+      # Optional: deploy STAGE overlay when pushing to 'stage' branch
+      - name: Apply STAGE overlay pinned by digest
+        if: ${{ github.ref == 'refs/heads/stage' }}
+        shell: bash
+        run: |
+          mkdir -p .tmp/stage
+          {
+            echo "resources:"
+            echo "  - ../../k8s/overlays/stage"
+            echo "images:"
+            echo "  - name: myapp"
+            echo "    newName: ${REGISTRY}/${OWNER}/${IMAGE_NAME}"
+            echo "    digest: ${DIGEST}"
+          } > .tmp/stage/kustomization.yaml
+          kubectl apply -k .tmp/stage
+          kubectl rollout status deploy/myapp --timeout=180s
+
