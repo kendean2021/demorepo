@@ -45,24 +45,27 @@ jobs:
 
       # Render a temp kustomize overlay that pins the digest
       - name: Apply DEV overlay pinned by digest
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p .tmp/dev
-          cat > .tmp/dev/kustomization.yaml <<EOF
-          resources:
-            - ../../k8s/overlays/dev
-          images:
-            - name: myapp
-              newName: $REGISTRY/$OWNER/$IMAGE_NAME
-              digest: $DIGEST
-          EOF
+          cat <<EOF > .tmp/dev/kustomization.yaml
+      resources:
+        - ../../k8s/overlays/dev
+      images:
+        - name: myapp
+          newName: ${REGISTRY}/${OWNER}/${IMAGE_NAME}
+          digest: ${DIGEST}
+      EOF
           kubectl apply -k .tmp/dev
           kubectl rollout status deploy/myapp --timeout=120s
-          
+
       - name: Verify image digest in running pods
+        shell: bash
         run: |
           POD=$(kubectl get pods -l app=myapp -o jsonpath='{.items[0].metadata.name}')
           IMG=$(kubectl get pod "$POD" -o jsonpath='{.spec.containers[0].image}')
-          echo "Pod image: $IMG"   # should be ghcr.io/...@sha256:*
+          echo "Pod image: $IMG"   # expect ghcr.io/...@sha256:*
 
         - name: Apply STAGE overlay pinned by digest
           if: github.ref == 'refs/heads/stage'
