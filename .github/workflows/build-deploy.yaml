@@ -105,6 +105,10 @@ jobs:
           kubectl run curl --image=curlimages/curl:8.8.0 --restart=Never --rm -i -- \
             sh -lc 'curl -ks -H "Host: myapp.local" https://'"$IP"'/' || true
 
+      - name: Ensure stage namespace
+        if: ${{ github.ref == 'refs/heads/stage' }}
+        run: kubectl create ns stage --dry-run=client -o yaml | kubectl apply -f -
+
       # Optional: deploy STAGE overlay when pushing to 'stage' branch
       - name: Apply STAGE overlay pinned by digest
         if: ${{ github.ref == 'refs/heads/stage' }}

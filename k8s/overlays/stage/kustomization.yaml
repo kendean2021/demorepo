@@ -1,5 +1,7 @@
 resources:
   - ../../base
+namespace: stage
 patches:
   - path: replicas.yaml
+  - path: ingress-host.yaml
 
