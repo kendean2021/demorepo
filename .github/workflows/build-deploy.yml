@@ -17,69 +17,90 @@ jobs:
       OWNER: ${{ github.repository_owner }}
       TAG: ${{ github.sha }}
 
-  steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Start Minikube
-      uses: medyagh/setup-minikube@v0.0.15
-      with:
-        driver: docker
-        kubernetes-version: v1.30.0
-        start-args: "--addons=ingress,metrics-server"
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@v0.0.15
+        with:
+          driver: docker
+          kubernetes-version: v1.30.0
+          start-args: "--addons=ingress,metrics-server"
 
       - name: Docker login (GHCR)
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Build & push image to GHCR
         run: |
-          IMAGE="$REGISTRY/$OWNER/$IMAGE_NAME:$TAG"
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${OWNER}/${IMAGE_NAME}:${TAG}"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
-          # capture digest for pinning
           FULL=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+          echo "FULL=$FULL"   # ghcr.io/...@sha256:...
           echo "FULL=$FULL" >> $GITHUB_ENV
           echo "DIGEST=${FULL#*@}" >> $GITHUB_ENV
-          echo "PUBLISHED=$FULL"
 
-      # Render a temp kustomize overlay that pins the digest
+      # (optional) make GHCR pulls work if package is private
+      - name: Create imagePullSecret for GHCR
+        run: |
+          kubectl create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username='${{ github.actor }}' \
+            --docker-password='${{ secrets.GITHUB_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}' || true
+
+      # (optional) your app secret from repo secret
+      - name: Create/Update app Secret
+        run: |
+          kubectl create secret generic myapp-secrets \
+            --from-literal=SECRET_TOKEN='${{ secrets.SECRET_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Apply DEV overlay pinned by digest
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .tmp/dev
-          cat <<EOF > .tmp/dev/kustomization.yaml
-      resources:
-        - ../../k8s/overlays/dev
-      images:
-        - name: myapp
-          newName: ${REGISTRY}/${OWNER}/${IMAGE_NAME}
-          digest: ${DIGEST}
-      EOF
+          cat <<'EOF' > .tmp/dev/kustomization.yaml
+resources:
+  - ../../k8s/overlays/dev
+images:
+  - name: myapp
+    newName: __REPLACE_ME__
+    digest: __DIGEST__
+EOF
+          sed -i "s|__REPLACE_ME__|${REGISTRY}/${OWNER}/${IMAGE_NAME}|g" .tmp/dev/kustomization.yaml
+          sed -i "s|__DIGEST__|${DIGEST}|g" .tmp/dev/kustomization.yaml
           kubectl apply -k .tmp/dev
-          kubectl rollout status deploy/myapp --timeout=120s
+          kubectl rollout status deploy/myapp --timeout=180s
 
-      - name: Verify image digest in running pods
-        shell: bash
+      - name: Verify image digest in running pod
         run: |
           POD=$(kubectl get pods -l app=myapp -o jsonpath='{.items[0].metadata.name}')
           IMG=$(kubectl get pod "$POD" -o jsonpath='{.spec.containers[0].image}')
-          echo "Pod image: $IMG"   # expect ghcr.io/...@sha256:*
+          echo "Pod image: $IMG"  # expect ghcr.io/...@sha256:*
 
-        - name: Apply STAGE overlay pinned by digest
-          if: github.ref == 'refs/heads/stage'
-          run: |
-            mkdir -p .tmp/stage
-            cat > .tmp/stage/kustomization.yaml <<EOF
-          resources:
-            - ../../k8s/overlays/stage
-          images:
-            - name: myapp
-              newName: $REGISTRY/$OWNER/$IMAGE_NAME
-              digest: $DIGEST
-          EOF
+      # deploy STAGE when pushing to 'stage' branch (optional)
+      - name: Apply STAGE overlay pinned by digest
+        if: ${{ github.ref == 'refs/heads/stage' }}
+        shell: bash
+        run: |
+          mkdir -p .tmp/stage
+          cat <<'EOF' > .tmp/stage/kustomization.yaml
+resources:
+  - ../../k8s/overlays/stage
+images:
+  - name: myapp
+    newName: __REPLACE_ME__
+    digest: __DIGEST__
+EOF
+          sed -i "s|__REPLACE_ME__|${REGISTRY}/${OWNER}/${IMAGE_NAME}|g" .tmp/stage/kustomization.yaml
+          sed -i "s|__DIGEST__|${DIGEST}|g" .tmp/stage/kustomization.yaml
           kubectl apply -k .tmp/stage
-          kubectl rollout status deploy/myapp --timeout=120s
+          kubectl rollout status deploy/myapp --timeout=180s
 
       steps:
       - name: Checkout
