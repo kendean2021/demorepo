@@ -4,5 +4,3 @@ resources:
   - ingress.yaml
   - clusterissuer.yaml
   - certificate.yaml
-  - configmap.yaml
-

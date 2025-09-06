@@ -7,5 +7,5 @@ spec:
   dnsNames:
     - myapp.local
   issuerRef:
-    name: selfsigned-issuer
     kind: ClusterIssuer
+    name: selfsigned-issuer
