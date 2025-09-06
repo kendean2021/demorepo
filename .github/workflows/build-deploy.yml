@@ -96,11 +96,11 @@ jobs:
           - name: myapp
             newName: ${REGISTRY}/${OWNER}/${IMAGE_NAME}
             digest: ${DIGEST}
-          EOF
-          sed -i "s|__REPLACE_ME__|${REGISTRY}/${OWNER}/${IMAGE_NAME}|g" .tmp/stage/kustomization.yaml
-          sed -i "s|__DIGEST__|${DIGEST}|g" .tmp/stage/kustomization.yaml
-          kubectl apply -k .tmp/stage
-          kubectl rollout status deploy/myapp --timeout=180s
+        EOF
+        sed -i "s|__REPLACE_ME__|${REGISTRY}/${OWNER}/${IMAGE_NAME}|g" .tmp/stage/kustomization.yaml
+        sed -i "s|__DIGEST__|${DIGEST}|g" .tmp/stage/kustomization.yaml
+        kubectl apply -k .tmp/stage
+        kubectl rollout status deploy/myapp --timeout=180s
 
       steps:
       - name: Checkout
