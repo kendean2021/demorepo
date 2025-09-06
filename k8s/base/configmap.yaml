@@ -4,4 +4,3 @@ metadata:
   name: myapp-config
 data:
   APP_MESSAGE: "Hello from ConfigMap"
-
