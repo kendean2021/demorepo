@@ -5,3 +5,4 @@ resources:
   - clusterissuer.yaml
   - certificate.yaml
   - configmap.yaml
+  - ../monitoring/servicemonitor-myapp.yaml

@@ -19,7 +19,8 @@ spec:
         - name: myapp
           image: myapp          # kustomize will replace by digest
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
           # ✅ envFrom / env must be inside the container
           envFrom:
             - configMapRef:
