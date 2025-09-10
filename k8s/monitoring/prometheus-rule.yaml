@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: myapp-rules
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  groups:
+    - name: myapp.rules
+      rules:
+        - alert: SyntheticAlwaysFiring
+          expr: vector(1)
+          for: 1m
+          labels: { severity: warning, service: myapp, env: dev }
+          annotations:
+            summary: "Synthetic alert (dev)"
+            description: "Lab rule to verify Alertmanager wiring."
+        - alert: MyAppPodsNotReady
+          expr: |
+            sum by (app) (kube_pod_status_ready{condition="true", namespace="default", pod=~"myapp-.*"}) < 1
+          for: 3m
+          labels: { severity: critical, service: myapp, env: dev }
+          annotations:
+            summary: "myapp has no ready pods"
+            description: "No ready myapp pods in default for 3m."
+
