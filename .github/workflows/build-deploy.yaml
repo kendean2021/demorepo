@@ -58,21 +58,21 @@ jobs:
             -o jsonpath='{.items[0].metadata.name}')
           echo "Using Prometheus service: ${SVC}"
 
-          # Poll for up to ~3 minutes (18 * 10s) until the alert appears
-          for i in $(seq 1 18); do
-            echo "Attempt $i/18…"
-            kubectl run curlmon --image=curlimages/curl:8.8.0 -n monitoring --restart=Never --rm -i -- \
-              sh -lc 'curl -sf http://'"$SVC"'.monitoring.svc.cluster.local:9090/api/v1/alerts \
-                | tee /dev/stderr | grep -q "SyntheticAlwaysFiring"'
-            RC=$?
-            if [ "$RC" -eq 0 ]; then
-              echo "✅ SyntheticAlwaysFiring present."
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "❌ Timed out waiting for SyntheticAlwaysFiring."
-          exit 1
+         # Poll for up to ~3 minutes (18 * 10s) until the alert appears
+         for i in $(seq 1 18); do
+           echo "Attempt $i/18…"
+           kubectl run curlmon --image=curlimages/curl:8.8.0 -n monitoring --restart=Never --rm -i -- \
+             sh -lc 'curl -sf http://'"$SVC"'.monitoring.svc.cluster.local:9090/api/v1/alerts 
+               | tee /dev/stderr | grep -q "SyntheticAlwaysFiring"'
+           RC=$?
+           if [ "$RC" -eq 0 ]; then
+             echo "✅ SyntheticAlwaysFiring present."
+             exit 0
+           fi
+           sleep 10
+         done
+         echo "❌ Timed out waiting for SyntheticAlwaysFiring."
+         exit 1
 
       - name: Docker login (GHCR)
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
