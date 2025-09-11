@@ -49,11 +49,30 @@ jobs:
           # optional dashboard; comment out if you didn’t add it:
           kubectl apply -f k8s/monitoring/grafana-dashboard.yaml || true
 
-      # Quick verification: synthetic alert present in Prometheus API
-      - name: Verify Synthetic alert firing
+      - name: Verify Synthetic alert firing (auto-detect + retry)
         run: |
-          kubectl run curlmon --image=curlimages/curl:8.8.0 -n monitoring --restart=Never --rm -i -- \
-            sh -lc 'curl -s http://kps-prometheus.monitoring.svc.cluster.local:9090/api/v1/alerts | tee /dev/stderr | grep -q SyntheticAlwaysFiring'
+          set -euo pipefail
+          # Find the Prometheus service created by kube-prometheus-stack
+          SVC=$(kubectl get svc -n monitoring \
+            -l app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server \
+            -o jsonpath='{.items[0].metadata.name}')
+          echo "Using Prometheus service: ${SVC}"
+
+          # Poll for up to ~3 minutes (18 * 10s) until the alert appears
+          for i in $(seq 1 18); do
+            echo "Attempt $i/18…"
+            kubectl run curlmon --image=curlimages/curl:8.8.0 -n monitoring --restart=Never --rm -i -- \
+              sh -lc 'curl -sf http://'"$SVC"'.monitoring.svc.cluster.local:9090/api/v1/alerts \
+                | tee /dev/stderr | grep -q "SyntheticAlwaysFiring"'
+            RC=$?
+            if [ "$RC" -eq 0 ]; then
+              echo "✅ SyntheticAlwaysFiring present."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ Timed out waiting for SyntheticAlwaysFiring."
+          exit 1
 
       - name: Docker login (GHCR)
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -80,7 +99,7 @@ jobs:
           kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}' || true
 
       - name: Install cert-manager (ephemeral cluster)
-        run: |
+      ts.GITHUB_TOKEN }}'  run: |
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
           kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
           kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
