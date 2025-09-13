@@ -28,51 +28,53 @@ jobs:
           kubernetes-version: v1.30.0
           start-args: "--addons=ingress,metrics-server"
 
-      # Setup Helm (once per job)
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
-      # Install Prometheus + Grafana (kube-prometheus-stack)
       - name: Install kube-prometheus-stack (Prometheus + Grafana)
+        shell: bash
         run: |
+          set -euo pipefail
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
           helm upgrade --install kps prometheus-community/kube-prometheus-stack \
             -n monitoring --create-namespace --wait
           kubectl get pods -n monitoring
 
-      # Apply your monitoring resources (ServiceMonitor, rules, optional dashboard)
       - name: Apply monitoring resources
-        run: |
-          kubectl apply -f k8s/monitoring/servicemonitor-myapp.yaml
-          kubectl apply -f k8s/monitoring/prometheus-rule.yaml
-          # optional dashboard; comment out if you didn’t add it:
-          kubectl apply -f k8s/monitoring/grafana-dashboard.yaml || true
-
-      - name: Verify Synthetic alert firing (auto-detect + retry)
+        shell: bash
         run: |
           set -euo pipefail
-          # Find the Prometheus service created by kube-prometheus-stack
+          kubectl apply -f k8s/monitoring/servicemonitor-myapp.yaml
+          kubectl apply -f k8s/monitoring/prometheus-rule.yaml
+          # optional dashboard; only apply if the file exists
+          if [ -f k8s/monitoring/grafana-dashboard.yaml ]; then
+            kubectl apply -f k8s/monitoring/grafana-dashboard.yaml
+          fi
+
+      - name: Verify Synthetic alert firing (auto-detect + retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # auto-detect the Prometheus service created by kube-prometheus-stack
           SVC=$(kubectl get svc -n monitoring \
             -l app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server \
             -o jsonpath='{.items[0].metadata.name}')
           echo "Using Prometheus service: ${SVC}"
 
-         # Poll for up to ~3 minutes (18 * 10s) until the alert appears
-         for i in $(seq 1 18); do
-           echo "Attempt $i/18…"
-           kubectl run curlmon --image=curlimages/curl:8.8.0 -n monitoring --restart=Never --rm -i -- \
-             sh -lc 'curl -sf http://'"$SVC"'.monitoring.svc.cluster.local:9090/api/v1/alerts 
-               | tee /dev/stderr | grep -q "SyntheticAlwaysFiring"'
-           RC=$?
-           if [ "$RC" -eq 0 ]; then
-             echo "✅ SyntheticAlwaysFiring present."
-             exit 0
-           fi
-           sleep 10
-         done
-         echo "❌ Timed out waiting for SyntheticAlwaysFiring."
-         exit 1
+          # poll up to ~3 minutes until the alert appears
+          for i in $(seq 1 18); do
+            echo "Attempt $i/18..."
+            if kubectl run curlmon --image=curlimages/curl:8.8.0 -n monitoring --restart=Never --rm -i -- \
+              sh -lc "curl -sf http://${SVC}.monitoring.svc.cluster.local:9090/api/v1/alerts | grep -q SyntheticAlwaysFiring"
+            then
+              echo "✅ SyntheticAlwaysFiring present."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ Timed out waiting for SyntheticAlwaysFiring."
+          exit 1
 
       - name: Docker login (GHCR)
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
