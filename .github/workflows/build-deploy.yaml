@@ -56,25 +56,54 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # auto-detect the Prometheus service created by kube-prometheus-stack
-          SVC=$(kubectl get svc -n monitoring \
-            -l app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server \
-            -o jsonpath='{.items[0].metadata.name}')
-          echo "Using Prometheus service: ${SVC}"
 
-          # poll up to ~3 minutes until the alert appears
-          for i in $(seq 1 18); do
+          # 1) Wait for Prometheus to be ready (statefulset created by kube-prometheus-stack)
+          PSS=$(kubectl -n monitoring get statefulset \
+            -l app.kubernetes.io/instance=kps,app.kubernetes.io/name=kube-prometheus-stack-prometheus \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+          if [ -n "$PSS" ]; then
+            kubectl -n monitoring rollout status statefulset/$PSS --timeout=300s || true
+          fi
+
+          # 2) Discover the Prometheus service (labels used by kube-prometheus-stack)
+          SVC=$(kubectl -n monitoring get svc \
+            -l app.kubernetes.io/instance=kps,app.kubernetes.io/name=kube-prometheus-stack-prometheus \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+
+          # 3) Fallback: try common service names
+          if [ -z "${SVC:-}" ]; then
+            for CAND in \
+              kps-kube-prometheus-stack-prometheus \
+              kube-prometheus-stack-prometheus \
+              prometheus-operated
+            do
+              if kubectl -n monitoring get svc "$CAND" >/dev/null 2>&1; then
+                SVC="$CAND"; break
+              fi
+            done
+          fi
+
+          if [ -z "${SVC:-}" ]; then
+            echo "Could not find Prometheus service in 'monitoring' namespace"
+            kubectl -n monitoring get svc -o wide --show-labels
+          exit 1
+          fi
+          echo "Using Prometheus service: $SVC"
+
+          # 4) Poll ~3 minutes for the alert (Prometheus needs to load rules + satisfy 'for: 1m')
+          for i in {1..18}; do
             echo "Attempt $i/18..."
             if kubectl run curlmon --image=curlimages/curl:8.8.0 -n monitoring --restart=Never --rm -i -- \
               sh -lc "curl -sf http://${SVC}.monitoring.svc.cluster.local:9090/api/v1/alerts | grep -q SyntheticAlwaysFiring"
             then
-              echo "✅ SyntheticAlwaysFiring present."
+              echo "SyntheticAlwaysFiring present."
               exit 0
             fi
             sleep 10
           done
-          echo "❌ Timed out waiting for SyntheticAlwaysFiring."
+          echo "Timed out waiting for SyntheticAlwaysFiring."
           exit 1
+
 
       - name: Docker login (GHCR)
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
