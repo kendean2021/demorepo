@@ -17,7 +17,7 @@ jobs:
       OWNER: ${{ github.repository_owner }}
       TAG: ${{ github.sha }}
 
-steps:
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -101,7 +101,8 @@ steps:
           kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}' || true
 
       - name: Install cert-manager (ephemeral cluster)
-      ts.GITHUB_TOKEN }}'  run: |
+        shell: bash
+        run: |
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
           kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
           kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
